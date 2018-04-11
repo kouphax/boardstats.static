@@ -1,3 +1,5 @@
+const _ = require('underscore')
+
 class BggApi {
     constructor() {
         this.client = require('bgg')({
@@ -26,6 +28,16 @@ class BggApi {
             var pageOfPlays = await this.client('plays', { username, page: page, pageSize: 100 })
             plays = plays.concat(pageOfPlays.plays.play)
         }
+
+        // convert some stuff to arrays the should be arrays
+        plays = _.chain(plays)
+            .map(play => {
+                if(!_.isArray(play.players.player)) {
+                    play.players.player = [play.players.player]
+                }
+                return play
+            })
+            .value()
 
         return plays
     }

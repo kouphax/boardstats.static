@@ -18,15 +18,22 @@ function playsForGrouping(plays, grouping) {
 
 class Statistician {
 
+
     static hIndex(plays) {
         return _.chain(plays)
             .groupBy(boardgameName)
             .mapObject(_.size)
             .values()
-            .groupBy(_.identity)
-            .values()
-            .max(a => _.size(a) >= a[0] ? a[0] : -1)
-            .flatten()
+            .reduce((memo, count) => {
+                for(let i = 0; i < count; i++) {
+                    memo[i] = memo[i] || []
+                    memo[i].push(i + 1)
+                }
+
+                return memo
+            }, [])
+            .reverse()
+            .find(p => p.length >= p[0])
             .value()[0]
     }
 
@@ -40,9 +47,30 @@ class Statistician {
         return _.map(refdata.monthsName, day => [day, results[day] || 0])
     }
 
-    static winRatio(plays, currentUser) {
+    static playCountPerDay(plays) {
+        return _.chain(playsForGrouping(plays, play => play.date))
+            .mapObject(_.size)
+            .sort()
+            .reverse()
+            .value()
+    }
+
+    static longestPlayerWinStreak(plays, player) {
+        return this.longestPlayerStreak(plays, player, play => {
+            return _.any(play.players.player, p => p.name === player && p.win === 1)
+        })
+    }
+
+    static longestPlayerLossStreak(plays, player) {
+        return this.longestPlayerStreak(plays, player, play => {
+            return _.any(play.players.player, p => p.name === player && p.win === 0)
+        })
+    }
+
+    static rivalries(plays, currentUser) {
 
         const scoreboard = _.chain(plays)
+            .filter(play => _.any(play.players.player, player => player.name === currentUser))
             .map(p => p.players.player)
             .flatten()
             .groupBy(p => p.name)
@@ -57,7 +85,9 @@ class Statistician {
             .reduce((memo, players) => {
                 const everyoneWon = _.every(players, player => player.win === 1)
                 const everyoneLost = _.every(players, player => player.win === 0)
-                if(everyoneLost || everyoneWon){
+                const playerPlayed = _.find(players, player => player.name === currentUser)
+
+                if(everyoneLost || everyoneWon || !playerPlayed){
                     return memo
                 } else {
                     return _.mapObject(memo, (score, playerName) => {
@@ -133,13 +163,79 @@ class Statistician {
             .value()
     }
 
+    // --- util --------------------------------------------------------------------------------------------------------
+    static played(plays, playerName) {
+        return _.chain(plays)
+            .filter(play => _.any(play.players.player, player => player.name === playerName))
+            .value()
+    }
+
+    static years(plays) {
+        return _.chain(plays)
+            .map(play => play.date.split("-")[0])
+            .uniq()
+            .value()
+    }
+
+
+    static boardgame(plays, boardgameName) {
+        return _.chain(plays)
+            .filter(play => play.item.name === boardgameName)
+            .value()
+    }
+
+    static players(plays) {
+        return _.chain(plays)
+            .map(play => _.pluck(play.players.player, 'name'))
+            .flatten()
+            .uniq()
+            .value()
+    }
+
+    static boardgames(plays) {
+        return _.chain(plays)
+            .map(play => play.item.name)
+            .flatten()
+            .uniq()
+            .value()
+    }
+
+    static longestPlayerStreak(plays, player, streakPredicate) {
+        return _.chain(this.played(plays, player))
+            .sortBy(play => play.date)
+            .reduce((memo, play) => {
+                const success = streakPredicate(play)
+                if(success) {
+                    memo.current = memo.current + 1
+                    if(memo.current >= memo.max) {
+                        memo.max = memo.current
+                    }
+                } else {
+                    memo.current = 0
+                }
+
+                return memo
+            }, { max: 0, current: 0 })
+            .value()
+            .max
+    }
+    // --- util --------------------------------------------------------------------------------------------------------
+
+
+    static period(plays) {
+        const dates = _.chain(plays).pluck('date').sort().value()
+        return {
+            from: _.first(dates),
+            to: _.last(dates)
+        }
+    }
+
     static report(atrributes, plays, playerName) {
         return _.chain(atrributes)
             .map(attribute => [attribute, this[attribute](plays, playerName)])
             .object()
             .value()
     }
-
 }
 
 
