@@ -2,7 +2,7 @@ const _ = require('underscore')
 const moment = require('moment')
 
 function boardgameName(play) {
-    return play.item.name
+    return play.game.name
 }
 
 const refdata = {
@@ -57,21 +57,21 @@ class Statistician {
 
     static longestPlayerWinStreak(plays, player) {
         return this.longestPlayerStreak(plays, player, play => {
-            return _.any(play.players.player, p => p.name === player && p.win === 1)
+            return _.any(play.players, p => p.name === player && p.win)
         })
     }
 
     static longestPlayerLossStreak(plays, player) {
         return this.longestPlayerStreak(plays, player, play => {
-            return _.any(play.players.player, p => p.name === player && p.win === 0)
+            return _.any(play.players, p => p.name === player && !p.win)
         })
     }
 
     static rivalries(plays, currentUser) {
 
         const scoreboard = _.chain(plays)
-            .filter(play => _.any(play.players.player, player => player.name === currentUser))
-            .map(p => p.players.player)
+            .filter(play => _.any(play.players, player => player.name === currentUser))
+            .map(p => p.players)
             .flatten()
             .groupBy(p => p.name)
             .mapObject(_.constant(0))
@@ -81,10 +81,10 @@ class Statistician {
         delete(scoreboard["Anonymous player"])
 
         return _.chain(plays)
-            .map(p => p.players.player)
+            .map(p => p.players)
             .reduce((memo, players) => {
-                const everyoneWon = _.every(players, player => player.win === 1)
-                const everyoneLost = _.every(players, player => player.win === 0)
+                const everyoneWon = _.every(players, player => player.win)
+                const everyoneLost = _.every(players, player => !player.win)
                 const playerPlayed = _.find(players, player => player.name === currentUser)
 
                 if(everyoneLost || everyoneWon || !playerPlayed){
@@ -92,9 +92,9 @@ class Statistician {
                 } else {
                     return _.mapObject(memo, (score, playerName) => {
                         const playerPlayed = _.find(players, player => player.name === playerName)
-                        const iWon = _.any(players, player => player.name === currentUser && player.win === 1)
+                        const iWon = _.any(players, player => player.name === currentUser && player.win)
                         if(playerPlayed) {
-                            const playerWon = playerPlayed.win === 1
+                            const playerWon = playerPlayed.win
                             if(playerWon && !iWon) {
                                 return score - 1
                             } else if(iWon && !playerWon) {
@@ -115,19 +115,19 @@ class Statistician {
 
     static newGameCount(plays, currentUser) {
         function isNewToCurrentUser(player) {
-            return player.name === currentUser && player.new === 1
+            return player.name === currentUser && player.firstTimePlaying
         }
 
         return _.chain(plays)
-            .filter(play => _.any(play.players.player, isNewToCurrentUser))
+            .filter(play => _.any(play.players, isNewToCurrentUser))
             .map(boardgameName)
+            .size()
             .value()
-            .length
     }
 
     static playerCount(plays) {
         return _.chain(plays)
-            .map(p => p.players.player.length)
+            .map(p => p.players.length)
             .groupBy(p => "" + p + " Players")
             .mapObject(p => p.length)
             .pairs()
@@ -137,7 +137,7 @@ class Statistician {
 
     static playCountByPlayer(plays, currentUser) {
         return _.chain(plays)
-            .map(play => play.players.player)
+            .map(play => play.players)
             .flatten(true)
             .groupBy(p => p.name === currentUser ? p.name + " (You)" : p.name)
             .mapObject(p => p.length)
@@ -147,7 +147,7 @@ class Statistician {
     }
 
     static gameCount(plays) {
-        return _.uniq(plays, false, play => play.item.name).length
+        return _.uniq(plays, false, play => play.game.name).length
     }
 
     static playCount(plays) {
@@ -166,7 +166,7 @@ class Statistician {
     // --- util --------------------------------------------------------------------------------------------------------
     static played(plays, playerName) {
         return _.chain(plays)
-            .filter(play => _.any(play.players.player, player => player.name === playerName))
+            .filter(play => _.any(play.players, player => player.name === playerName))
             .value()
     }
 
@@ -180,13 +180,13 @@ class Statistician {
 
     static boardgame(plays, boardgameName) {
         return _.chain(plays)
-            .filter(play => play.item.name === boardgameName)
+            .filter(play => play.game.name === boardgameName)
             .value()
     }
 
     static players(plays) {
         return _.chain(plays)
-            .map(play => _.pluck(play.players.player, 'name'))
+            .map(play => _.pluck(play.players, 'name'))
             .flatten()
             .uniq()
             .value()
@@ -194,7 +194,7 @@ class Statistician {
 
     static boardgames(plays) {
         return _.chain(plays)
-            .map(play => play.item.name)
+            .map(play => play.game.name)
             .flatten()
             .uniq()
             .value()

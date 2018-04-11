@@ -29,17 +29,32 @@ class BggApi {
             plays = plays.concat(pageOfPlays.plays.play)
         }
 
-        // convert some stuff to arrays the should be arrays
-        plays = _.chain(plays)
+        return _.chain(plays)
+            .map(play => _.pick(play, "id", "date", "location", "item", "players"))
             .map(play => {
-                if(!_.isArray(play.players.player)) {
-                    play.players.player = [play.players.player]
+                play.game = {
+                    name: play.item.name,
+                    id: play.item.objectid
                 }
+
+                delete play.item
+                return play
+            })
+            .map(play => {
+                play.players = _.flatten([play.players.player])
+                play.players = _.map(play.players, player => {
+                    return {
+                        username: player.username,
+                        userid: player.userid,
+                        name: player.name,
+                        score: player.score,
+                        firstTimePlaying: player.new === 1,
+                        win: player.win === 1
+                    }
+                })
                 return play
             })
             .value()
-
-        return plays
     }
 }
 
