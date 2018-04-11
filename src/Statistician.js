@@ -30,12 +30,12 @@ class Statistician {
             .value()[0]
     }
 
-    static playsPerDayOfWeek(plays) {
+    static playCountPerDayOfWeek(plays) {
         const results = _.mapObject(playsForGrouping(plays, play => moment(play.date).format('dddd')), _.size)
         return _.map(refdata.daysOfWeekName, day => [day, results[day] || 0])
     }
 
-    static playsPerMonth(plays) {
+    static playCountPerMonth(plays) {
         const results = _.mapObject(playsForGrouping(plays, play => moment(play.date).format('MMMM')), _.size)
         return _.map(refdata.monthsName, day => [day, results[day] || 0])
     }
@@ -83,7 +83,7 @@ class Statistician {
             .value()
     }
 
-    static newGamesPlayed(plays, currentUser) {
+    static newGameCount(plays, currentUser) {
         function isNewToCurrentUser(player) {
             return player.name === currentUser && player.new === 1
         }
@@ -92,9 +92,10 @@ class Statistician {
             .filter(play => _.any(play.players.player, isNewToCurrentUser))
             .map(boardgameName)
             .value()
+            .length
     }
 
-    static uniquePlayerCount(plays) {
+    static playerCount(plays) {
         return _.chain(plays)
             .map(p => p.players.player.length)
             .groupBy(p => "" + p + " Players")
@@ -104,7 +105,7 @@ class Statistician {
             .value()
     }
 
-    static uniquePlayers(plays, currentUser) {
+    static playCountByPlayer(plays, currentUser) {
         return _.chain(plays)
             .map(play => play.players.player)
             .flatten(true)
@@ -115,15 +116,15 @@ class Statistician {
             .value()
     }
 
-    static uniqueGamesPlayed(plays) {
-        return _.uniq(plays, false, play => play.item.name)
+    static gameCount(plays) {
+        return _.uniq(plays, false, play => play.item.name).length
     }
 
-    static totalPlays(plays) {
-        return plays
+    static playCount(plays) {
+        return plays.length
     }
 
-    static gamesByPlay(plays) {
+    static playCountByGame(plays) {
         return _.chain(plays)
             .groupBy(boardgameName)
             .mapObject(_.size)
@@ -132,38 +133,13 @@ class Statistician {
             .value()
     }
 
-    static report(playsForCurrentPeriod, playsForPreviousPeriod, currentUser) {
-        return {
-            listOfGames: this.gamesByPlay(playsForCurrentPeriod),
-            uniquePlayers: this.uniquePlayers(playsForCurrentPeriod),
-            uniquePlayerCount: this.uniquePlayerCount(playsForCurrentPeriod),
-            totalPlays: {
-                current: this.totalPlays(playsForCurrentPeriod).length,
-                previous: this.totalPlays(playsForPreviousPeriod).length
-            },
-            uniqueGamesPlayed: {
-                current: this.uniqueGamesPlayed(playsForCurrentPeriod).length,
-                previous: this.uniqueGamesPlayed(playsForPreviousPeriod).length
-            },
-            newGamesPlayedCount: {
-                current: this.newGamesPlayed(playsForCurrentPeriod, currentUser).length,
-                previous: this.newGamesPlayed(playsForPreviousPeriod, currentUser).length
-            },
-            winRatio: this.winRatio(playsForCurrentPeriod, currentUser),
-            hIndex: {
-                current: this.hIndex(playsForCurrentPeriod),
-                previous: this.hIndex(playsForPreviousPeriod)
-            },
-            playsPerDayOfWeek: {
-                current: this.playsPerDayOfWeek(playsForCurrentPeriod),
-                previous: this.playsPerDayOfWeek(playsForPreviousPeriod)
-            },
-            playsPerMonth: {
-                current: this.playsPerMonth(playsForCurrentPeriod),
-                previous: this.playsPerMonth(playsForPreviousPeriod)
-            }
-        }
+    static report(atrributes, plays, playerName) {
+        return _.chain(atrributes)
+            .map(attribute => [attribute, this[attribute](plays, playerName)])
+            .object()
+            .value()
     }
+
 }
 
 
