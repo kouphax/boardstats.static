@@ -52,6 +52,7 @@ class Statistician {
             .mapObject(_.size)
             .sort()
             .reverse()
+            .pairs()
             .value()
     }
 
@@ -169,14 +170,6 @@ class Statistician {
             .filter(play => _.any(play.players, player => player.name === playerName))
             .value()
     }
-
-    static years(plays) {
-        return _.chain(plays)
-            .map(play => play.date.split("-")[0])
-            .uniq()
-            .value()
-    }
-
 
     static boardgame(plays, boardgameName) {
         return _.chain(plays)
