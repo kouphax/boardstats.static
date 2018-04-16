@@ -1,9 +1,10 @@
 const _ = require('underscore')
 const moment = require('moment')
 
-function boardgameName(play) {
-    return play.game.name
+function boardgame(play) {
+    return play.game.id
 }
+
 
 const refdata = {
     daysOfWeekName: ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"],
@@ -20,8 +21,8 @@ class Statistician {
 
 
     static hIndex(plays) {
-        return _.chain(plays)
-            .groupBy(boardgameName)
+        return (_.chain(plays)
+            .groupBy(boardgame)
             .mapObject(_.size)
             .values()
             .reduce((memo, count) => {
@@ -34,7 +35,7 @@ class Statistician {
             }, [])
             .reverse()
             .find(p => p.length >= p[0])
-            .value()[0]
+            .value() || [0])[0]
     }
 
     static playCountPerDayOfWeek(plays) {
@@ -66,6 +67,72 @@ class Statistician {
         return this.longestPlayerStreak(plays, player, play => {
             return _.any(play.players, p => p.name === player && !p.win)
         })
+    }
+
+    static weightedWinCount(plays) {
+        return _.chain(plays)
+            .map(play => play.players)
+            .flatten()
+            .reduce((memo, player) => {
+                memo[player.name] = memo[player.name] || 0
+                memo[player.name] = memo[player.name] + (player.win ? 1 : -1)
+                return memo
+            }, {})
+            .pairs()
+            .sortBy(p => -p[1])
+            .value()
+    }
+
+    static winsVsLoses(plays, playerName) {
+        const wvl =  _.chain(plays)
+            .map(play => play.players)
+            .flatten()
+            .filter(player => player.name === playerName)
+            .countBy(play => play.win ? 'win' : 'loss')
+            .value()
+
+        return Object.assign({}, wvl, { winPct: Math.round((wvl.win/(wvl.win + wvl.loss))*100) })
+    }
+
+    static elo(plays) {
+        const playerStats =  _.chain(plays)
+            .map(play => play.players)
+            .flatten()
+            .groupBy(player => player.name)
+            .mapObject((playerPlays, name) => {
+                const wins = _.filter(playerPlays, play => play.win).length
+                const loses = _.filter(playerPlays, play => !play.win).length
+                return {
+                    wins, loses, name,
+                    winPct: (wins/(wins + loses)) * 100
+                }
+            })
+            .values()
+            .value()
+        const avgWinPctForAllPlayers = _.reduce(playerStats, (m,p) => m + p.winPct, 0) / _.size(playerStats)
+
+        return _.chain(playerStats)
+            .map(stats => [stats.name,  (stats.wins + 32 * avgWinPctForAllPlayers) / (stats.wins + stats.loses + 32)])
+            .sortBy(p => p[1])
+            .value()
+    }
+
+    static champion(plays, playerName) {
+        const champ = _.chain(plays)
+            .groupBy(play => play.game.id)
+            .pairs()
+            .reject(plays => Statistician.isCooperative(plays[1]))
+            .object()
+            .mapObject(boardgamePlays => {
+                const winCount = this.weightedWinCount(boardgamePlays)
+                return winCount[0][0]
+            })
+            .pairs()
+            .filter(champions => champions[1] === playerName)
+            .map(champions => champions[0])
+            .value()
+
+        return champ
     }
 
     static rivalries(plays, currentUser) {
@@ -121,7 +188,7 @@ class Statistician {
 
         return _.chain(plays)
             .filter(play => _.any(play.players, isNewToCurrentUser))
-            .map(boardgameName)
+            .map(boardgame)
             .size()
             .value()
     }
@@ -147,6 +214,18 @@ class Statistician {
             .value()
     }
 
+    static winCountByPlayer(plays) {
+        return _.chain(plays)
+            .map(play => play.players)
+            .flatten(true)
+            .filter(player => player.win)
+            .groupBy(p => p.name)
+            .mapObject(p => p.length)
+            .pairs()
+            .sortBy(b => -b[1])
+            .value()
+    }
+
     static gameCount(plays) {
         return _.uniq(plays, false, play => play.game.name).length
     }
@@ -157,7 +236,7 @@ class Statistician {
 
     static playCountByGame(plays) {
         return _.chain(plays)
-            .groupBy(boardgameName)
+            .groupBy(boardgame)
             .mapObject(_.size)
             .pairs()
             .sortBy(b => -b[1])
@@ -171,27 +250,24 @@ class Statistician {
             .value()
     }
 
-    static boardgame(plays, boardgameName) {
+    static boardgame(plays, boardgame) {
         return _.chain(plays)
-            .filter(play => play.game.name === boardgameName)
+            .filter(play => play.game.id === boardgame.id)
             .value()
     }
 
     static players(plays) {
         return _.chain(plays)
-            .map(play => _.pluck(play.players, 'name'))
+            .map(play => {
+                return _.map(play.players, player => {
+                    return {id: player.name.toLowerCase(), name: player.name}
+                })
+            })
             .flatten()
-            .uniq()
+            .uniq(player => player.id)
             .value()
     }
 
-    static boardgames(plays) {
-        return _.chain(plays)
-            .map(play => play.game.name)
-            .flatten()
-            .uniq()
-            .value()
-    }
 
     static longestPlayerStreak(plays, player, streakPredicate) {
         return _.chain(this.played(plays, player))
@@ -212,9 +288,27 @@ class Statistician {
             .value()
             .max
     }
+
+    static boardgames(plays) {
+        return _.chain(plays)
+            .groupBy(play => play.game.id)
+            .mapObject(plays => {
+                const cooperative = Statistician.isCooperative(plays)
+                return Object.assign({}, plays[0].game, { cooperative })
+            })
+            .values()
+            .value()
+    }
+
     // --- util --------------------------------------------------------------------------------------------------------
 
-
+    static isCooperative(plays) {
+        return _.every(plays, play => {
+            const everyoneWon = _.every(play.players, player => player.win)
+            const everyoneLost = _.every(play.players, player => !player.win)
+            return everyoneWon || everyoneLost
+        })
+    }
     static period(plays) {
         const dates = _.chain(plays).pluck('date').sort().value()
         return {

@@ -2,6 +2,7 @@ const Statistician = require("./Statistician")
 const BggApi = require("./BggApi")
 const moment = require('moment')
 const fs = require('fs');
+const util = require('util');
 const _ = require('underscore')
 const rm = require('rmdir-recursive')
 const Handlebars = require('handlebars')
@@ -19,10 +20,12 @@ function report(plays, period) {
             "hIndex",
             "playCountPerDayOfWeek",
             "playCountPerMonth",
-            "playCountPerDay"
+            "playCountPerDay",
+            "weightedWinCount"
         ], plays),
         players: _.chain(Statistician.players(plays))
-            .map(playerName => {
+            .map(player => {
+                const playerName = player.name
                 const played = Statistician.played(plays, playerName)
                 const report = Statistician.report([
                     "playCountByGame",
@@ -36,9 +39,12 @@ function report(plays, period) {
                     "hIndex",
                     "playCountPerDayOfWeek",
                     "playCountPerMonth",
-                    "playCountPerDay"
+                    "playCountPerDay",
+                    "winsVsLoses"
                 ], played, playerName)
-                return [ playerName, report ]
+                // this is stuff that needs the ENTIRE data set relevant to the user
+                const annex = Statistician.report(["champion"], plays, playerName)
+                return [ playerName, Object.assign({}, report, annex) ]
             })
             .object()
             .value(),
@@ -48,21 +54,28 @@ function report(plays, period) {
                 const report = Statistician.report([
                     "playerCount",
                     "playCount",
+                    "playCountByPlayer",
                     "playCountPerDayOfWeek",
                     "playCountPerMonth",
-                    "playCountPerDay"
+                    "playCountPerDay",
+                    "winCountByPlayer",
+                    "period",
+                    "weightedWinCount"
                 ], gameplays)
-                return [ boardgame, report ]
+                return [ boardgame.id, report ]
             })
             .object()
             .value()
     }
 }
 
-function template(data) {
-    const source = fs.readFileSync('./resources/report.mustache', { encoding: "utf8"})
-    const tpl = Handlebars.compile(source)
-    return tpl(data)
+function render(template, data) {
+    const cache = {}
+    render = function(template, data) {
+        cache[template] = cache[template] || Handlebars.compile(fs.readFileSync(`./resources/${template}.mustache`, { encoding: "utf8"}))
+        return cache[template](data)
+    }
+    return render(template, data)
 }
 
 function byPeriod(plays, periodFormat) {
@@ -70,8 +83,8 @@ function byPeriod(plays, periodFormat) {
 }
 
 function dump(stuff) {
-    //console.log(util.inspect(stuff, false, null))
-    fs.writeFileSync('dump.json', JSON.stringify(stuff))
+    console.log(util.inspect(stuff, false, null))
+    //fs.writeFileSync('dump.json', JSON.stringify(stuff))
 }
 
 class App {
@@ -97,42 +110,60 @@ class App {
             })
         }
 
+//        dump(stats)
+
+        const boardgames = Statistician.boardgames(plays)
+        const players = Statistician.players(plays)
+
+        Handlebars.registerHelper('boardgameName', function(id) {
+            return _.find(boardgames, game => ("" + game.id) === id).name
+        });
+
+        Handlebars.registerHelper('playerId', function(name) {
+            return name.toLowerCase()
+        });
+
         rm.rmdirRecursiveSync('./build')
 
         fs.mkdirSync('./build')
-        fs.mkdirSync(`./build/${username}`)
+
 
         // _.each(["daily", "weekly", "monthly", "yearly"], i => {
         //     fs.mkdirSync(`./build/${username}/${i}`)
         //     for(let entry in stats.periods[i]) if(stats.periods[i].hasOwnProperty(entry)) {
         //         fs.writeFileSync(`./build/${username}/${i}/${entry}.json`, JSON.stringify(stats.periods[i][entry]))
-        //         fs.writeFileSync(`./build/${username}/${i}/${entry}.html`, template(stats.periods[i][entry]))
+        //         fs.writeFileSync(`./build/${username}/${i}/${entry}.html`, reportTemplate(stats.periods[i][entry]))
         //     }
         // })
 
-        fs.writeFileSync(`./build/${username}/index.json`, JSON.stringify(stats))
-        fs.writeFileSync(`./build/${username}/overall.json`, JSON.stringify(stats.overall))
-        fs.writeFileSync(`./build/${username}/index.html`, template(stats.overall))
+        // fs.writeFileSync(`./build/index.json`, JSON.stringify(stats))
+        // fs.writeFileSync(`./build/overall.json`, JSON.stringify(stats.overall))
 
-        const currentYearlyPeriod = moment().format("YYYY")
-        const lastYearlyPeriod = moment().subtract(1, "year").format("YYYY")
-        const currentMonthlyPeriod = moment().format(moment.HTML5_FMT.DATE)
-        const currentWeeklyPeriod = moment().format(moment.HTML5_FMT.WEEK)
-        const currentDailyPeriod = moment().format(moment.HTML5_FMT.MONTH)
 
-        /*
-        /index.html (user focused - James)
-            - High Level View
-                Total Plays
-                Total Games Played
-                H-Index
-            - Last Game Played
-            -
-        /play/index.html (all time)
-        /play
-        /player
-        /game
-        */
+        function write(root, report) {
+            try { fs.mkdirSync(`./build${root}`) } catch(e) {}
+            try { fs.mkdirSync(`./build${root}game`) } catch(e) {}
+            try { fs.mkdirSync(`./build${root}player`) } catch(e) {}
+
+            fs.writeFileSync(`./build${root}index.html`, render("report", report))
+            fs.writeFileSync(`./build${root}plays.html`, render("plays",  report))
+            fs.writeFileSync(`./build${root}games.html`, render("games",  report))
+
+            _.mapObject(report.boardgames, (report, id) => {
+                const boardgame = _.find(boardgames, game => ("" + game.id) === id)
+                fs.writeFileSync(`./build${root}game/${id}.html`, render("game", { id, report, boardgame }))
+            })
+
+            _.mapObject(report.players, (report, name) => {
+                const player = _.find(players, player => player.name === name)
+                fs.writeFileSync(`./build${root}player/${player.id}.html`, render("player", { id: player.id, report, player }))
+            })
+        }
+
+        write("/", stats.overall)
+        write("/monthly/", stats.periods.monthly[moment().format(moment.HTML5_FMT.MONTH)])
+        write("/weekly/", stats.periods.weekly[moment().format(moment.HTML5_FMT.WEEK)] || report([],moment().format(moment.HTML5_FMT.WEEK)))
+        write("/yearly/", stats.periods.yearly[moment().format("YYYY")])
     }
 }
 

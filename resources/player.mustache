@@ -2,8 +2,6 @@
 <html lang="en">
     <head>
         <link href="https://fonts.googleapis.com/css?family=Noto+Sans" rel="stylesheet">
-        <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
-
         <meta charset="utf-8">
         <title>{{ period }}</title>
         <style>
@@ -80,10 +78,6 @@
                 text-align: center;
             }
 
-            section ol li:nth-child(n+11) {
-                display:none;
-            }
-
             section h2 {
                 text-align: center;
             }
@@ -100,108 +94,124 @@
     <body>
         <header>
             <h1>boardstats.io</h1>
-            <h2>{{ period }}</h2>
+            <h2>{{ player.name }}</h2>
         </header>
         <section class="high">
             <h2>Total Plays</h2>
             <h3>
-                <a href="plays.html">{{ plays.playCount }}</a>
+                <a href="#">{{ report.playCount }}</a>
             </h3>
         </section>
         <section class="high">
-            <h2>Game Played</h2>
+            <h2>Longest Win Streak</h2>
             <h3>
-                <a href="games.html">{{ plays.gameCount }}</a>
+                <a href="#">{{ report.longestPlayerWinStreak }}</a>
+            </h3>
+        </section>
+        <section class="high">
+            <h2>Longest Loss Streak</h2>
+            <h3>
+                <a href="#">{{ report.longestPlayerLossStreak }}</a>
             </h3>
         </section>
         <section class="high">
             <h2>H-Index</h2>
             <h3>
-                <a href="games.html">{{ plays.hIndex }}</a>
+                <a href="games.html">{{ report.hIndex }}</a>
             </h3>
         </section>
-        <section>
-            <h2>Last Played</h2>
-            <h3>
-                <a href="game/{{ raw.[0].game.id }}.html">{{ raw.[0].game.name }}</a>
-            </h3>
+        <section class="high">
+            <h2>Wins vs Loses</h2>
+            <h3>Wins: {{ report.winsVsLoses.win }}</h3>
+            <h3>Loses: {{ report.winsVsLoses.loss }}</h3>
+            <h3>Win Percent: {{ report.winsVsLoses.winPct }}%</h3>
+        </section>
+        <section class="chart">
+            <h2>Rivalries</h2>
+            <ol>
+                {{#report.rivalries}}
+                    <li data-value="{{ this.[1] }}">
+                        <a href="{{ playerId this.[0] }}.html">{{ this.[0] }}</a>({{ this.[1] }})
+                    </li>
+                {{/report.rivalries}}
+            </ol>
+        </section>
+        <section class="chart">
+            <h2>Champion</h2>
+            <ol>
+                {{#report.champion}}
+                    <li data-value="{{ this }}">
+                        <a href="../game/{{ this }}.html">{{ boardgameName this }}</a>
+                    </li>
+                {{/report.champion}}
+            </ol>
         </section>
         <section class="chart" >
             <h2>
                 <a href="games.html">Play Count By Game</a>
             </h2>
             <ol>
-            {{#plays.playCountByGame}}
-                <li data-value="{{ this.[1] }}">
-                    <a href="game/{{ this.[0] }}.html">{{ boardgameName this.[0] }}</a> ({{ this.[1] }})
-                </li>
-            {{/plays.playCountByGame}}
-            </ol>
-        </section>
-        <section class="chart">
-            <h2>Play Count By Player</h2>
-            <ol>
-                {{#plays.playCountByPlayer}}
+                {{#report.playCountByGame}}
                     <li data-value="{{ this.[1] }}">
-                        <a href="player/{{ playerId this.[0] }}.html">{{ this.[0] }}</a> ({{ this.[1] }})
+                        <a href="../game/{{ this.[0] }}.html">{{ boardgameName this.[0] }}</a> ({{ this.[1] }})
                     </li>
-                {{/plays.playCountByPlayer}}
+                {{/report.playCountByGame}}
             </ol>
         </section>
         <section class="chart">
             <h2>Player Count</h2>
             <ol>
-                {{#plays.playerCount}}
+                {{#report.playerCount}}
                     <li data-value="{{ this.[1] }}">{{ this.[0] }}({{ this.[1] }})</li>
-                {{/plays.playerCount}}
+                {{/report.playerCount}}
             </ol>
         </section>
         <section >
             <h2>Play Count Per Day of Week</h2>
             <section id="dayOfWeek">
                 <section class="values">
-                    {{#plays.playCountPerDayOfWeek}}
+                    {{#report.playCountPerDayOfWeek}}
                         <section class="value" data-value="{{ this.[1] }}">{{ this.[1] }}</section>
-                    {{/plays.playCountPerDayOfWeek}}
+                    {{/report.playCountPerDayOfWeek}}
                 </section>
                 <section class="labels">
-                    {{#plays.playCountPerDayOfWeek}}
+                    {{#report.playCountPerDayOfWeek}}
                         <section>{{ this.[0] }}</section>
-                    {{/plays.playCountPerDayOfWeek}}
+                    {{/report.playCountPerDayOfWeek}}
                 </section>
             </section>
             <!--<ol>-->
-                <!--{{#plays.playCountPerDayOfWeek}}-->
+                <!--{{#report.playCountPerDayOfWeek}}-->
             <!--<li data-value="{{ this.[1] }}">{{ this.[0] }} ({{ this.[1] }})</li>-->
-                <!--{{/plays.playCountPerDayOfWeek}}-->
+                <!--{{/report.playCountPerDayOfWeek}}-->
             <!--</ol>-->
         </section>
         <section >
             <h2>Play Count Per Month</h2>
             <section id="monthOfYear">
                 <section class="values">
-                    {{#plays.playCountPerMonth}}
+                    {{#report.playCountPerMonth}}
                         <section class="value" data-value="{{ this.[1] }}">{{ this.[1] }}</section>
-                    {{/plays.playCountPerMonth}}
+                    {{/report.playCountPerMonth}}
                 </section>
                 <section class="labels">
-                    {{#plays.playCountPerMonth}}
+                    {{#report.playCountPerMonth}}
                         <section>{{ this.[0] }}</section>
-                    {{/plays.playCountPerMonth}}
+                    {{/report.playCountPerMonth}}
                 </section>
             </section>
             <!--<ol>-->
-                <!--{{#plays.playCountPerDayOfWeek}}-->
+                <!--{{#report.playCountPerDayOfWeek}}-->
             <!--<li data-value="{{ this.[1] }}">{{ this.[0] }} ({{ this.[1] }})</li>-->
-                <!--{{/plays.playCountPerDayOfWeek}}-->
+                <!--{{/report.playCountPerDayOfWeek}}-->
             <!--</ol>-->
         </section>
         <section>
             <h2>Play Count Per Day</h2>
             <ol>
-                {{#plays.playCountPerDay}}
+                {{#report.playCountPerDay}}
                     <li data-value="{{ this.[1] }}">{{ this.[0] }} ({{ this.[1] }})</li>
-                {{/plays.playCountPerDay}}
+                {{/report.playCountPerDay}}
             </ol>
         </section>
     </body>
