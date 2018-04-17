@@ -6,6 +6,8 @@ const util = require('util');
 const _ = require('underscore')
 const rm = require('rmdir-recursive')
 const Handlebars = require('handlebars')
+const yaml = require('js-yaml');
+
 
 function report(plays, period) {
     return {
@@ -110,60 +112,111 @@ class App {
             })
         }
 
-//        dump(stats)
-
         const boardgames = Statistician.boardgames(plays)
         const players = Statistician.players(plays)
+        //
+        // dump(boardgames)
+        //
+        // Handlebars.registerHelper('boardgameName', function(id) {
+        //     return _.find(boardgames, game => ("" + game.id) === id).name
+        // });
+        //
+        // Handlebars.registerHelper('playerId', function(name) {
+        //     return name.toLowerCase()
+        // });
+        //
+        // rm.rmdirRecursiveSync('./build')
+        //
+        // fs.mkdirSync('./build')
+        //
+        //
+        // // _.each(["daily", "weekly", "monthly", "yearly"], i => {
+        // //     fs.mkdirSync(`./build/${username}/${i}`)
+        // //     for(let entry in stats.periods[i]) if(stats.periods[i].hasOwnProperty(entry)) {
+        // //         fs.writeFileSync(`./build/${username}/${i}/${entry}.json`, JSON.stringify(stats.periods[i][entry]))
+        // //         fs.writeFileSync(`./build/${username}/${i}/${entry}.html`, reportTemplate(stats.periods[i][entry]))
+        // //     }
+        // // })
+        //
+        // // fs.writeFileSync(`./build/index.json`, JSON.stringify(stats))
+        // // fs.writeFileSync(`./build/overall.json`, JSON.stringify(stats.overall))
+        //
+        //
+        // function write(root, report) {
+        //     try { fs.mkdirSync(`./build${root}`) } catch(e) {}
+        //     try { fs.mkdirSync(`./build${root}game`) } catch(e) {}
+        //     try { fs.mkdirSync(`./build${root}player`) } catch(e) {}
+        //
+        //     fs.writeFileSync(`./build${root}index.html`, render("report", report))
+        //     fs.writeFileSync(`./build${root}plays.html`, render("plays",  report))
+        //     fs.writeFileSync(`./build${root}games.html`, render("games",  report))
+        //
+        //     _.mapObject(report.boardgames, (report, id) => {
+        //         const boardgame = _.find(boardgames, game => ("" + game.id) === id)
+        //         fs.writeFileSync(`./build${root}game/${id}.html`, render("game", { id, report, boardgame }))
+        //     })
+        //
+        //     _.mapObject(report.players, (report, name) => {
+        //         const player = _.find(players, player => player.name === name)
+        //         fs.writeFileSync(`./build${root}player/${player.id}.html`, render("player", { id: player.id, report, player }))
+        //     })
+        // }
+        //
+        // write("/", stats.overall)
+        // write("/monthly/", stats.periods.monthly[moment().format(moment.HTML5_FMT.MONTH)])
+        // write("/weekly/", stats.periods.weekly[moment().format(moment.HTML5_FMT.WEEK)] || report([],moment().format(moment.HTML5_FMT.WEEK)))
+        // write("/yearly/", stats.periods.yearly[moment().format("YYYY")])
+        //
 
-        Handlebars.registerHelper('boardgameName', function(id) {
-            return _.find(boardgames, game => ("" + game.id) === id).name
-        });
-
-        Handlebars.registerHelper('playerId', function(name) {
-            return name.toLowerCase()
-        });
-
-        rm.rmdirRecursiveSync('./build')
-
-        fs.mkdirSync('./build')
+        const challenges = yaml.safeLoad(fs.readFileSync('./resources/challenges.yml', 'utf8'));
 
 
-        // _.each(["daily", "weekly", "monthly", "yearly"], i => {
-        //     fs.mkdirSync(`./build/${username}/${i}`)
-        //     for(let entry in stats.periods[i]) if(stats.periods[i].hasOwnProperty(entry)) {
-        //         fs.writeFileSync(`./build/${username}/${i}/${entry}.json`, JSON.stringify(stats.periods[i][entry]))
-        //         fs.writeFileSync(`./build/${username}/${i}/${entry}.html`, reportTemplate(stats.periods[i][entry]))
-        //     }
-        // })
-
-        // fs.writeFileSync(`./build/index.json`, JSON.stringify(stats))
-        // fs.writeFileSync(`./build/overall.json`, JSON.stringify(stats.overall))
-
-
-        function write(root, report) {
-            try { fs.mkdirSync(`./build${root}`) } catch(e) {}
-            try { fs.mkdirSync(`./build${root}game`) } catch(e) {}
-            try { fs.mkdirSync(`./build${root}player`) } catch(e) {}
-
-            fs.writeFileSync(`./build${root}index.html`, render("report", report))
-            fs.writeFileSync(`./build${root}plays.html`, render("plays",  report))
-            fs.writeFileSync(`./build${root}games.html`, render("games",  report))
-
-            _.mapObject(report.boardgames, (report, id) => {
-                const boardgame = _.find(boardgames, game => ("" + game.id) === id)
-                fs.writeFileSync(`./build${root}game/${id}.html`, render("game", { id, report, boardgame }))
+        _.chain([challenges[1]])
+            .map(challenge => {
+                 return Object.assign({}, challenge, {
+                     plays: _.chain(plays)
+                         // filter by period
+                         .filter(play => {
+                             if(challenge.period) {
+                                 return moment(play.date).isBetween(moment(challenge.period.from), moment(challenge.period.to), "day")
+                             } else {
+                                 return true
+                             }
+                         })
+                         .tap(x => x)
+                         // filter by game
+                         .filter(play =>  {
+                             if(challenge.boardgames) {
+                                 const explicitlyIncluded = challenge.boardgames.include && _.any(challenge.boardgames.include, g => g.id === play.game.id)
+                                 const notExcluded = challenge.boardgames.exclude && !_.any(challenge.boardgames.exclude, g => g.id === play.game.id)
+                                 return explicitlyIncluded || notExcluded
+                             } else {
+                                 return true
+                             }
+                         })
+                         .tap(x => x)
+                         // filter by players
+                         .filter(play => {
+                             const playerNames = _.map(play.players, player => player.name)
+                             if(challenge.players) {
+                                 if(challenge.players.any) {
+                                    return _.any(challenge.players.any, player => _.contains(playerNames, player))
+                                 } else if(challenge.players.all) {
+                                    return _.all(challenge.players.all, player => _.contains(playerNames, player))
+                                 } else if(challenge.players.only) {
+                                    return _.isEmpty(_.difference(playerNames, challenge.players.only))
+                                 }
+                             } else {
+                                 return true
+                             }
+                         })
+                        .value()
+                 })
             })
+            .tap(console.log)
+        // achievements
+        // gaming groups
 
-            _.mapObject(report.players, (report, name) => {
-                const player = _.find(players, player => player.name === name)
-                fs.writeFileSync(`./build${root}player/${player.id}.html`, render("player", { id: player.id, report, player }))
-            })
-        }
-
-        write("/", stats.overall)
-        write("/monthly/", stats.periods.monthly[moment().format(moment.HTML5_FMT.MONTH)])
-        write("/weekly/", stats.periods.weekly[moment().format(moment.HTML5_FMT.WEEK)] || report([],moment().format(moment.HTML5_FMT.WEEK)))
-        write("/yearly/", stats.periods.yearly[moment().format("YYYY")])
     }
 }
 
